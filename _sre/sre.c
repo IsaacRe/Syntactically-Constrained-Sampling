@@ -3035,7 +3035,7 @@ static struct PyModuleDef sremodule = {
 };
 
 PyMODINIT_FUNC
-PyInit__sre(void)
+PyInit_scs_sre(void)
 {
     return PyModuleDef_Init(&sremodule);
 }
