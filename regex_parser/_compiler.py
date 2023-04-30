@@ -10,7 +10,7 @@
 
 """Internal support module for sre"""
 
-import _sre
+import scs_sre as _sre
 from . import _parser
 from ._constants import *
 from ._casefix import _EXTRA_CASES

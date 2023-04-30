@@ -15,7 +15,7 @@
 
 MAGIC = 20220615
 
-from _sre import MAXREPEAT, MAXGROUPS
+from scs_sre import MAXREPEAT, MAXGROUPS
 
 # SRE standard exception (access as sre.error)
 # should this really be here?
