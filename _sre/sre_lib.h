@@ -11,6 +11,8 @@
 /* String matching engine */
 
 /* This file is included three times, with different character settings */
+#include <stdio.h>
+
 
 LOCAL(int)
 SRE(at)(SRE_STATE* state, const SRE_CHAR* ptr, SRE_CODE at)
@@ -1639,9 +1641,12 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
     SRE_CODE* charset = NULL;
     SRE_CODE* overlap = NULL;
     int flags = 0;
+    printf("in search\n");
 
-    if (ptr > end)
-        return 0;
+    if (ptr > end) {
+        printf("Fail 1\n");
+        return 1;
+    }
 
     if (pattern[0] == SRE_OP_INFO) {
         /* optimization info block */
@@ -1652,7 +1657,8 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
         if (pattern[3] && end - ptr < (Py_ssize_t)pattern[3]) {
             TRACE(("reject (got %u chars, need %u)\n",
                    (unsigned int)(end - ptr), pattern[3]));
-            return 0;
+            //printf("Fail 2\n");
+            //return 0;
         }
         if (pattern[3] > 1) {
             /* adjust end point (but make sure we leave at least one
@@ -1681,19 +1687,25 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
            prefix, prefix_len, prefix_skip));
     TRACE(("charset = %p\n", charset));
 
+    printf("Prefix Lenght: %ld", prefix_len);
+
     if (prefix_len == 1) {
         /* pattern starts with a literal character */
         SRE_CHAR c = (SRE_CHAR) prefix[0];
 #if SIZEOF_SRE_CHAR < 4
-        if ((SRE_CODE) c != prefix[0])
+        if ((SRE_CODE) c != prefix[0]) {
+            printf("Fail 3\n");
             return 0; /* literal can't match: doesn't fit in char width */
+        }
 #endif
         end = (SRE_CHAR *)state->end;
         state->must_advance = 0;
         while (ptr < end) {
             while (*ptr != c) {
-                if (++ptr >= end)
-                    return 0;
+                if (++ptr >= end) {
+                    printf("Fail 4\n");  // Couldnt match against beginning of pattern
+                    return 0;  // return 1 (appending to substring could lead to matchs)
+                }
             }
             TRACE(("|%p|%p|SEARCH LITERAL\n", pattern, ptr));
             state->start = ptr;
@@ -1706,6 +1718,7 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
             ++ptr;
             RESET_CAPTURE_GROUP();
         }
+        printf("Fail 5\n");
         return 0;
     }
 
@@ -1715,29 +1728,42 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
         Py_ssize_t i = 0;
 
         end = (SRE_CHAR *)state->end;
-        if (prefix_len > end - ptr)
-            return 0;
+        // if (prefix_len > end - ptr) {
+        //     printf("Fail 6\n");
+        //     return 0;
+        // }
 #if SIZEOF_SRE_CHAR < 4
         for (i = 0; i < prefix_len; i++)
-            if ((SRE_CODE)(SRE_CHAR) prefix[i] != prefix[i])
+            if ((SRE_CODE)(SRE_CHAR) prefix[i] != prefix[i]) {
+                printf("Fail 7\n");
                 return 0; /* literal can't match: doesn't fit in char width */
+            }
 #endif
         while (ptr < end) {
             SRE_CHAR c = (SRE_CHAR) prefix[0];
+            printf("Prefix: %c, %c\n", c, *ptr);
+
             while (*ptr++ != c) {
-                if (ptr >= end)
+                printf("Prefix: %c, %c\n", c, *ptr);
+                if (ptr >= end) {
+                    printf("Fail 8\n");
                     return 0;
+                }
             }
-            if (ptr >= end)
+            if (ptr >= end) {
+                printf("Fail 9\n");
                 return 0;
+            }
 
             i = 1;
             state->must_advance = 0;
             do {
                 if (*ptr == (SRE_CHAR) prefix[i]) {
                     if (++i != prefix_len) {
-                        if (++ptr >= end)
+                        if (++ptr >= end) {
+                            printf("Fail 10\n");
                             return 0;
+                        }
                         continue;
                     }
                     /* found a potential match */
@@ -1750,13 +1776,16 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
                     if (status != 0)
                         return status;
                     /* close but no cigar -- try again */
-                    if (++ptr >= end)
+                    if (++ptr >= end) {
+                        printf("Fail 11\n");
                         return 0;
+                    }
                     RESET_CAPTURE_GROUP();
                 }
                 i = overlap[i];
             } while (i != 0);
         }
+        printf("Fail 12\n");
         return 0;
     }
 
@@ -1767,8 +1796,10 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
         for (;;) {
             while (ptr < end && !SRE(charset)(state, charset, *ptr))
                 ptr++;
-            if (ptr >= end)
+            if (ptr >= end) {
+                printf("Fail 13\n");
                 return 0;
+            }
             TRACE(("|%p|%p|SEARCH CHARSET\n", pattern, ptr));
             state->start = ptr;
             state->ptr = ptr;
@@ -1783,6 +1814,7 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
         assert(ptr <= end);
         TRACE(("|%p|%p|SEARCH\n", pattern, ptr));
         state->start = state->ptr = ptr;
+        printf("Recursing 2\n");
         status = SRE(match)(state, pattern, 1);
         state->must_advance = 0;
         if (status == 0 && pattern[0] == SRE_OP_AT &&
@@ -1790,6 +1822,7 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
              pattern[1] == SRE_AT_BEGINNING_STRING))
         {
             state->start = state->ptr = ptr = end;
+            printf("Fail 14\n");
             return 0;
         }
         while (status == 0 && ptr < end) {
@@ -1797,10 +1830,14 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
             RESET_CAPTURE_GROUP();
             TRACE(("|%p|%p|SEARCH\n", pattern, ptr));
             state->start = state->ptr = ptr;
+            printf("Recursing\n");
             status = SRE(match)(state, pattern, 0);
         }
     }
 
+    if (status == 0) {
+        printf("Fail 15\n");
+    }
     return status;
 }
 
