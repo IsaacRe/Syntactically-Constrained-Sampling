@@ -544,11 +544,15 @@ typedef struct {
     #define USE_COMPUTED_GOTOS 0
 #endif
 
+#define RETURN_SUCCESS_IF_EXHAUSTED \
+    do { if (ptr >= end) RETURN_SUCCESS; } while (0)
+
 #if USE_COMPUTED_GOTOS
     #define TARGET(OP) TARGET_ ## OP
     #define DISPATCH                       \
         do {                               \
             MAYBE_CHECK_SIGNALS;           \
+            RETURN_SUCCESS_IF_EXHAUSTED;   \
             goto *sre_targets[*pattern++]; \
         } while (0)
 #else
@@ -593,7 +597,7 @@ entrance:
         if (pattern[3] && (uintptr_t)(end - ptr) < pattern[3]) {
             TRACE(("reject (got %zd chars, need %zd)\n",
                    end - ptr, (Py_ssize_t) pattern[3]));
-            RETURN_FAILURE;
+            //RETURN_FAILURE;
         }
         pattern += pattern[1] + 1;
     }
@@ -603,6 +607,7 @@ entrance:
 #else
 dispatch:
     MAYBE_CHECK_SIGNALS;
+    RETURN_SUCCESS_IF_EXHAUSTED;
     switch (*pattern++)
 #endif
     {
@@ -858,8 +863,8 @@ dispatch:
             TRACE(("|%p|%p|REPEAT_ONE %d %d\n", pattern, ptr,
                    pattern[1], pattern[2]));
 
-            if ((Py_ssize_t) pattern[1] > end - ptr)
-                RETURN_FAILURE; /* cannot match */
+            // if ((Py_ssize_t) pattern[1] > end - ptr)
+            //     RETURN_FAILURE; /* cannot match */ // TODO modified
 
             state->ptr = ptr;
 
@@ -873,6 +878,9 @@ dispatch:
                matches, and ptr points to the tail of the target
                string.  check if the rest of the pattern matches,
                and backtrack if not. */
+
+            if (ptr >= end)  // TODO modified
+                RETURN_SUCCESS;  // if all remaining chars were matched in this repeat, success
 
             if (ctx->count < (Py_ssize_t) pattern[1])
                 RETURN_FAILURE;
@@ -957,8 +965,8 @@ dispatch:
             TRACE(("|%p|%p|MIN_REPEAT_ONE %d %d\n", pattern, ptr,
                    pattern[1], pattern[2]));
 
-            if ((Py_ssize_t) pattern[1] > end - ptr)
-                RETURN_FAILURE; /* cannot match */
+            // if ((Py_ssize_t) pattern[1] > end - ptr)
+            //     RETURN_FAILURE; /* cannot match */  // TODO modified
 
             state->ptr = ptr;
 
@@ -976,6 +984,9 @@ dispatch:
                 ctx->count = ret;
                 ptr += ctx->count;
             }
+
+            if (ptr >= end)  // TODO modified
+                RETURN_SUCCESS;  // if all remaining chars were matched in this repeat, success
 
             if (pattern[pattern[0]] == SRE_OP_SUCCESS &&
                 !(ctx->toplevel &&
@@ -1049,6 +1060,9 @@ dispatch:
             ctx->count = ret;
             ptr += ctx->count;
 
+            if (ptr >= end)  // TODO modified
+                RETURN_SUCCESS;  // if all remaining chars were matched in this repeat, success
+
             /* when we arrive here, count contains the number of
                matches, and ptr points to the tail of the target
                string.  check if the rest of the pattern matches,
@@ -1107,7 +1121,7 @@ dispatch:
                 RETURN_ON_ERROR(ret);
                 RETURN_SUCCESS;
             }
-            RETURN_FAILURE;
+            RETURN_FAILURE;  // TODO test multi-char repeats
 
         TARGET(SRE_OP_MAX_UNTIL):
             /* maximizing repeat */
@@ -1174,7 +1188,7 @@ dispatch:
 
             RETURN_ON_SUCCESS(ret);
             state->ptr = ptr;
-            RETURN_FAILURE;
+            RETURN_FAILURE;  // TODO test multi-chat max repeats
 
         TARGET(SRE_OP_MIN_UNTIL):
             /* minimizing repeat */
@@ -1505,9 +1519,12 @@ dispatch:
             /* <ASSERT> <skip> <back> <pattern> */
             TRACE(("|%p|%p|ASSERT %d\n", pattern,
                    ptr, pattern[1]));
-            if (ptr - (SRE_CHAR *)state->beginning < (Py_ssize_t)pattern[1])
-                RETURN_FAILURE;
-            state->ptr = ptr - pattern[1];
+            if (ptr - (SRE_CHAR *)state->beginning < (Py_ssize_t)pattern[1]) {
+                RETURN_FAILURE;  // TODO maybe comment out - we dont care if we matched all repetitions
+                state->ptr = (SRE_CHAR *)state->beginning;
+            } else {
+                state->ptr = ptr - pattern[1];
+            }
             DO_JUMP0(JUMP_ASSERT, jump_assert, pattern+2);
             RETURN_ON_FAILURE(ret);
             pattern += pattern[0];
@@ -1687,7 +1704,7 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
            prefix, prefix_len, prefix_skip));
     TRACE(("charset = %p\n", charset));
 
-    printf("Prefix Lenght: %ld", prefix_len);
+    printf("Prefix Length: %ld\n", prefix_len);
 
     if (prefix_len == 1) {
         /* pattern starts with a literal character */
