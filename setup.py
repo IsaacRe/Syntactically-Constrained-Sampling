@@ -7,4 +7,4 @@ module = Extension(
     extra_compile_args=["-D", "Py_BUILD_CORE"],
 )
 
-setup(name='scs_sre', version='1.0', description='Example module', ext_modules=[module])
+setup(name='scs_re', version='1.0', description='Example module', ext_modules=[module], packages=["scs_re"])
