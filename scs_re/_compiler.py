@@ -738,6 +738,9 @@ def dis(code):
 def compile(p, flags=0):
     # internal: convert pattern list to internal format
 
+    # SCS - pattern must start with `^` and end with `$`
+    p = f"^{p.strip('^$')}$"
+
     if isstring(p):
         pattern = p
         p = _parser.parse(p, flags)
