@@ -1658,10 +1658,10 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
     SRE_CODE* charset = NULL;
     SRE_CODE* overlap = NULL;
     int flags = 0;
-    printf("in search\n");
+    //printf("in search\n");
 
     if (ptr > end) {
-        printf("Fail 1\n");
+        //printf("Fail 1\n");
         return 1;
     }
 
@@ -1704,14 +1704,14 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
            prefix, prefix_len, prefix_skip));
     TRACE(("charset = %p\n", charset));
 
-    printf("Prefix Length: %ld\n", prefix_len);
+    //printf("Prefix Length: %ld\n", prefix_len);
 
     if (prefix_len == 1) {
         /* pattern starts with a literal character */
         SRE_CHAR c = (SRE_CHAR) prefix[0];
 #if SIZEOF_SRE_CHAR < 4
         if ((SRE_CODE) c != prefix[0]) {
-            printf("Fail 3\n");
+            //printf("Fail 3\n");
             return 0; /* literal can't match: doesn't fit in char width */
         }
 #endif
@@ -1720,7 +1720,7 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
         while (ptr < end) {
             while (*ptr != c) {
                 if (++ptr >= end) {
-                    printf("Fail 4\n");  // Couldnt match against beginning of pattern
+                    //printf("Fail 4\n");  // Couldnt match against beginning of pattern
                     return 0;  // return 1 (appending to substring could lead to matchs)
                 }
             }
@@ -1735,7 +1735,7 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
             ++ptr;
             RESET_CAPTURE_GROUP();
         }
-        printf("Fail 5\n");
+        //printf("Fail 5\n");
         return 0;
     }
 
@@ -1752,7 +1752,7 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
 #if SIZEOF_SRE_CHAR < 4
         for (i = 0; i < prefix_len; i++)
             if ((SRE_CODE)(SRE_CHAR) prefix[i] != prefix[i]) {
-                printf("Fail 7\n");
+                //printf("Fail 7\n");
                 return 0; /* literal can't match: doesn't fit in char width */
             }
 #endif
@@ -1761,14 +1761,14 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
             printf("Prefix: %c, %c\n", c, *ptr);
 
             while (*ptr++ != c) {
-                printf("Prefix: %c, %c\n", c, *ptr);
+                //printf("Prefix: %c, %c\n", c, *ptr);
                 if (ptr >= end) {
-                    printf("Fail 8\n");
+                    //printf("Fail 8\n");
                     return 0;
                 }
             }
             if (ptr >= end) {
-                printf("Fail 9\n");
+                //printf("Fail 9\n");
                 return 0;
             }
 
@@ -1778,7 +1778,7 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
                 if (*ptr == (SRE_CHAR) prefix[i]) {
                     if (++i != prefix_len) {
                         if (++ptr >= end) {
-                            printf("Fail 10\n");
+                            //printf("Fail 10\n");
                             return 0;
                         }
                         continue;
@@ -1794,7 +1794,7 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
                         return status;
                     /* close but no cigar -- try again */
                     if (++ptr >= end) {
-                        printf("Fail 11\n");
+                        //printf("Fail 11\n");
                         return 0;
                     }
                     RESET_CAPTURE_GROUP();
@@ -1802,7 +1802,7 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
                 i = overlap[i];
             } while (i != 0);
         }
-        printf("Fail 12\n");
+        //printf("Fail 12\n");
         return 0;
     }
 
@@ -1814,7 +1814,7 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
             while (ptr < end && !SRE(charset)(state, charset, *ptr))
                 ptr++;
             if (ptr >= end) {
-                printf("Fail 13\n");
+                //printf("Fail 13\n");
                 return 0;
             }
             TRACE(("|%p|%p|SEARCH CHARSET\n", pattern, ptr));
@@ -1831,7 +1831,7 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
         assert(ptr <= end);
         TRACE(("|%p|%p|SEARCH\n", pattern, ptr));
         state->start = state->ptr = ptr;
-        printf("Recursing 2\n");
+        //printf("Recursing 2\n");
         status = SRE(match)(state, pattern, 1);
         state->must_advance = 0;
         if (status == 0 && pattern[0] == SRE_OP_AT &&
@@ -1839,7 +1839,7 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
              pattern[1] == SRE_AT_BEGINNING_STRING))
         {
             state->start = state->ptr = ptr = end;
-            printf("Fail 14\n");
+            //printf("Fail 14\n");
             return 0;
         }
         while (status == 0 && ptr < end) {
@@ -1847,13 +1847,13 @@ SRE(search)(SRE_STATE* state, SRE_CODE* pattern)
             RESET_CAPTURE_GROUP();
             TRACE(("|%p|%p|SEARCH\n", pattern, ptr));
             state->start = state->ptr = ptr;
-            printf("Recursing\n");
+            //printf("Recursing\n");
             status = SRE(match)(state, pattern, 0);
         }
     }
 
     if (status == 0) {
-        printf("Fail 15\n");
+        //printf("Fail 15\n");
     }
     return status;
 }
