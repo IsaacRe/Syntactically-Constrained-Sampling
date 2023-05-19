@@ -4,7 +4,7 @@ from copy import deepcopy
 
 from scs.incremental_parse import IncrementalParser
 
-from . import IncrementalParser, ParseFailure, SpecialToken
+from .. import IncrementalParser, ParseFailure, SpecialToken
 
 
 class JSONParser(IncrementalParser):
