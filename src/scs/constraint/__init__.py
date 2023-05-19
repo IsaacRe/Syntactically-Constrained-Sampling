@@ -12,6 +12,8 @@ class SyntaxConstraint:
         self.parser.append(next_chars)
     
     def check_next(self, chars: Union[List[str], "SpecialToken"]) -> bool:
+        if not chars:
+            return False
         parser_copy = self.parser.copy()
         try:
             parser_copy.append(chars)

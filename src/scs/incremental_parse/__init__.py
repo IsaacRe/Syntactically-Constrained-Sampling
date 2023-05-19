@@ -39,7 +39,7 @@ class IncrementalParser:
     Return:
         bool:
         Boolean specifying whether parsing of this value is complete"""
-    def _append(self, char: Union[str, "SpecialToken"]):
+    def _append(self, char: Union[str, "SpecialToken"]) -> bool:
         raise NotImplementedError()
     
     def append(self, chars: Union[List[str], "SpecialToken"]):
