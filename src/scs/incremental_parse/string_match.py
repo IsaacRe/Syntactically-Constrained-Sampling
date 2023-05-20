@@ -40,7 +40,7 @@ class MultiStringMatchParser(IncrementalParser):
     def __init__(self, match_strings: List[str] = []):
         super().__init__()
         self._done = False
-        self._sub_parsers = [StringMatchParser(match_string) for match_string in match_strings]
+        self._sub_parsers: List[StringMatchParser] = [StringMatchParser(match_string) for match_string in match_strings]
         self._running_parsers = list(range(len(self._sub_parsers)))
 
     def _copy_from(self, other: "MultiStringMatchParser"):
@@ -64,4 +64,5 @@ class MultiStringMatchParser(IncrementalParser):
         self._running_parsers = not_failed
         if len(not_failed) == 0:
             raise ParseFailure(f"Failure(s) in string match subparsers: {', '.join(failures)}")
+        self._parsed = self._sub_parsers[self._running_parsers[0]]._parsed
         return done

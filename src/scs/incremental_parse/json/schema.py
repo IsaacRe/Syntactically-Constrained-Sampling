@@ -1,11 +1,11 @@
 from enum import Enum
-from typing import Dict, Union, Optional, List, Tuple
+from typing import Dict, Union, Optional, List, Tuple, Iterable
 from dataclasses import dataclass
 
 from scs.incremental_parse import IncrementalParser, SpecialToken
 
 from .. import IncrementalParser, ParseFailure, SpecialToken
-from ..string_match import StringMatchParser, MultiStringMatchParser
+from ..string_match import StringMatchParser
 
 
 def isalpha(char: str) -> bool:
@@ -68,7 +68,8 @@ class ObjectSchemaParser(SchemaValueParser):
             self._parse_status = ObjectParseStatus.FINISHED_VALUE
             assert self._curr_key is not None
             value = self._curr_value_basetype if self._curr_value_basetype is not None else self._active_subparser.value
-            self.value.add_prop(key=self._curr_key, value=JSONValue(value, is_array=self._array_set))
+            value._is_list = self._array_set
+            self.value.add_prop(key=self._curr_key, value=JSONValue(value))
             self._curr_key = None
             self._curr_value_basetype = None
             self._array_set = False
@@ -137,6 +138,9 @@ class ObjectSchemaParser(SchemaValueParser):
 
 class JSONSchemaParser(ObjectSchemaParser):
 
+    """
+    Parser for outer JSON. Effectively an ObjectSchemaParser that is initialized with AWAITING_VALUE status
+    and closes once the first value has been parsed."""
     def __init__(self):
         super().__init__()
         self._curr_key = JSONKey("")
@@ -168,8 +172,8 @@ class PropNameParser(IncrementalParser):
 
     def valid_char(self, char: str):
         if len(self._parsed) > 0:
-            return char.isalnum() or char == SpecialChar.UNDERSCORE
-        return char.isalpha() or char == SpecialChar.UNDERSCORE
+            return char.isalnum() or char == SpecialChar.UNDERSCORE.value
+        return char.isalpha() or char == SpecialChar.UNDERSCORE.value
 
     def _append(self, char: str) -> bool:
         if not self.valid_char(char):
@@ -179,31 +183,39 @@ class PropNameParser(IncrementalParser):
 
 
 class JSONSchema:
-    pass
+    
+    def __init__(self, is_list: bool = False) -> None:
+        self._is_list = is_list
 
 
 class BaseTypeSchema(JSONSchema):
     
-    def __init__(self, type: "BaseType"):
+    def __init__(self, type: "BaseType", is_list: bool = False):
+        super().__init__(is_list=is_list)
         self.type = type
 
     def __eq__(self, __value: object) -> bool:
-        return isinstance(__value, BaseTypeSchema) and self.type == __value.type
+        return (
+            isinstance(__value, BaseTypeSchema) and
+            self.type == __value.type and
+            self._is_list == __value._is_list
+        )
 
     def __repr__(self) -> str:
-        return self.type.value
+        return ('[]' if self._is_list else '') + self.type.value
 
 
 # TODO  add this
 class StringEnumSchema(JSONSchema):
 
-    def __init__(self, options: List[str] = []) -> None:
+    def __init__(self, options: List[str] = [], is_list: bool = False) -> None:
+        super().__init__(is_list=is_list)
         self.options = options
 
     def __eq__(self, __value: object) -> bool:
         return (
-            isinstance(__value, StringEnumSchema)
-            and
+            isinstance(__value, StringEnumSchema) and
+            self._is_list == __value._is_list and
             len(set(self.options).intersection(set(__value.options))) == len(self.options)
         )
 
@@ -211,14 +223,25 @@ class StringEnumSchema(JSONSchema):
 class ObjectSchema(JSONSchema):
 
     def __init__(self, is_list: bool = False):
-        self._is_list = is_list
+        super().__init__(is_list=is_list)
         self._child_schemas: List[Tuple[JSONKey, JSONValue]] = []
 
     def add_prop(self, key: "JSONKey", value: "JSONValue"):
         self._child_schemas += [(key, value)]
 
+    def get_keys(self, optional: Optional[bool] = None) -> Iterable["JSONKey"]:
+        for k, _ in self._child_schemas:
+            if optional is None or k.optional == optional:
+                yield k
+
+    def get_items(self) -> Iterable[Tuple["JSONKey", "JSONValue"]]:
+        for k, v in self._child_schemas:
+            yield k, v
+
     def __eq__(self, __value: object) -> bool:
         if not isinstance(__value, ObjectSchema):
+            return False
+        if self._is_list != __value._is_list:
             return False
         for (k1, v1), (k2, v2) in zip(self._child_schemas, __value._child_schemas):
             if k1 != k2 or v1 != v2:
@@ -235,15 +258,14 @@ class JSONKey:
 @dataclass
 class JSONValue:
     value_def: JSONSchema
-    is_array: bool = False
 
 
 class BaseType(Enum):
     STRING = "string"
     NUMBER = "number"
 
-    def schema(self) -> BaseTypeSchema:
-        return BaseTypeSchema(type=self)
+    def schema(self, is_list: bool = False) -> BaseTypeSchema:
+        return BaseTypeSchema(type=self, is_list=is_list)
 
 
 class SpecialChar(Enum):
