@@ -22,6 +22,11 @@ class TestStringMatchParser(unittest.TestCase):
             parser._append("l")
             parser._append("x")  # Mismatched character
 
+    def test_match_nocase(self):
+        parser = StringMatchParser("hello", nocase=True)
+        parser._append("H")
+
+
 class TestMultiStringMatchParser(unittest.TestCase):
 
     def test_match_success(self):

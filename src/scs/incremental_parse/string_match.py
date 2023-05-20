@@ -5,9 +5,10 @@ from . import IncrementalParser, ParseFailure, SpecialToken
 
 class StringMatchParser(IncrementalParser):
 
-    def __init__(self, match_string: str = ""):
+    def __init__(self, match_string: str = "", nocase: bool = False):
         super().__init__()
-        self.match_string = match_string
+        self.match_string = match_string.lower() if nocase else match_string
+        self._nocase = nocase
         self._parse_idx = 0
         self._done = False
 
@@ -18,6 +19,8 @@ class StringMatchParser(IncrementalParser):
         self._done = other._done
 
     def _append(self, char: str | SpecialToken) -> bool:
+        if self._nocase:
+            char = char.lower()
         if isinstance(char, SpecialToken):
             if char != SpecialToken.EOS or not self._done:
                 raise ParseFailure("Got special token before match completion")

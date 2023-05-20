@@ -389,12 +389,6 @@ class SpecialChar(Enum):
     ZERO = "0"
 
 
-class JSONType(Enum):
-    NUMBER: NumberParser
-    STRING: StringParser
-    OBJECT: ObjectParser
-
-
 class ObjectParseStatus(Enum):
     OPENED = 0
     AWAITING_KEY = 1
