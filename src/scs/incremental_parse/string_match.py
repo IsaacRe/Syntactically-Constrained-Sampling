@@ -1,6 +1,6 @@
 from typing import List, Union
 from scs.incremental_parse import IncrementalParser, SpecialToken
-from . import IncrementalParser, ParseFailure, SpecialToken
+from . import IncrementalParser, ParseFailure, SpecialToken, TokenGroup
 
 
 class StringMatchParser(IncrementalParser):
@@ -33,6 +33,9 @@ class StringMatchParser(IncrementalParser):
         self._parse_idx += 1
         self._done = self._parse_idx == len(self.match_string)
         return self._done
+    
+    def invalid_token_groups(self) -> TokenGroup:
+        return NonAlnumGroup
 
 
 class MultiStringMatchParser(IncrementalParser):
@@ -66,3 +69,16 @@ class MultiStringMatchParser(IncrementalParser):
             raise ParseFailure(f"Failure(s) in string match subparsers: {', '.join(failures)}")
         self._parsed = self._sub_parsers[self._running_parsers[0]]._parsed
         return done
+    
+    def invalid_token_groups(self) -> TokenGroup:
+        return NonAlnumGroup
+
+
+class NonAlnumGroup(TokenGroup):
+
+    @staticmethod
+    def filter(token: str) -> bool:
+        for c in token:
+            if not (c.isalnum() or c == "_"):
+                return True
+        return False

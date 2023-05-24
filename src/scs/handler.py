@@ -1,21 +1,37 @@
 from concurrent.futures.thread import ThreadPoolExecutor
 from concurrent.futures import Future, as_completed
-from typing import List, Iterable, Tuple, Optional
+from typing import List, Iterable, Tuple, Optional, Dict, Type
+from dataclasses import dataclass
 
 from .constraint import SyntaxConstraint
 from .constraint.json import valid_json, force_json_schema
 from .constraint.one_of import one_of
+from .incremental_parse.json.parser import AllTokenGroup, NonNumericTokenGroup, InvalidFloatTokenGroup, BeginWithNonJsonCharGroup
+from .incremental_parse.string_match import NonAlnumGroup
+from .incremental_parse import TokenGroup
+
+
+TOKEN_GROUPS = [
+    AllTokenGroup, NonNumericTokenGroup, InvalidFloatTokenGroup, BeginWithNonJsonCharGroup, NonAlnumGroup
+]
+
+
+def make_vocab_splits(vocab: List[str], *token_group_types: Type[TokenGroup]) -> Dict[Type, "VocabSplit"]:
+    split_dict = {}
+    for T in token_group_types:
+        split = VocabSplit()
+        split.filter_vocab(vocab, grouping=T)
+        split_dict[T] = split
+    return split_dict
 
 
 def _check_token_batched(
     check: SyntaxConstraint,
     check_idx: int,
-    token_batch: List[str],
-    start_token_idx: int,
+    token_batch: List[Tuple[int, str]],
 ) -> Iterable[Tuple[int, int]]:
-    for token_idx, token in enumerate(token_batch, start=start_token_idx):
+    for token_idx, token in token_batch:
         if not check.check_next(token):
-            print('MULTIPROCESSING')
             yield check_idx, token_idx
 
 
@@ -61,39 +77,56 @@ class SyntaxValidityCheckHandler:
         self._active_futures: List[Future] = []
         self._initialized = False
         self._token_vocab = token_vocab
+        self._vocab_splits = make_vocab_splits(token_vocab, *TOKEN_GROUPS)
         self._check_factory = check_factory
         self._active_checks = [check_factory()]  # initialize single check to constrain start tokens
         if begin_first_check:
             self.process_invalid_next_tokens()
+
+    r"""
+    Yield tokens from each invalid group"""
+    def await_invalid_next_tokens(self) -> Iterable[Tuple[int, int]]:
+        for check_idx, check in enumerate(self._active_checks):
+            suppress_tokens, check_tokens = [], enumerate(self._token_vocab)
+            vocab_split = self._vocab_splits.get(check.invalid_token_group())
+            if vocab_split:
+                suppress_tokens, check_tokens = vocab_split.filtered, vocab_split.remaining
+            for token_id, token in suppress_tokens:
+                yield check_idx, token_id
+            for token_id, token in check_tokens:
+                if not check.check_next(token):
+                    yield check_idx, token_id
+
+    def process_invalid_next_tokens(self):
+        pass
 
     def cancel_current_check(self):
         for future in self._active_futures:
             future.cancel()
         self._active_futures = []
 
-    r"""
-    Returns tuples (batch idx, vocab idx) for every invalid next token for each active check.
-    Should be called after each update."""
-    def process_invalid_next_tokens(self):
-        self._active_futures = []
-        for check_idx, check in enumerate(self._active_checks):
-            for start_token_idx in range(0, len(self._token_vocab), self._batch_size):
-                print('ADDING BATCH TO THREAD')
-                self._active_futures += [
-                    self._executor.submit(
-                        _check_token_batched,
-                        check,
-                        check_idx,
-                        self._token_vocab[start_token_idx:start_token_idx+self._batch_size],
-                        start_token_idx,
-                    )
-                ]
+    # r"""
+    # Returns tuples (batch idx, vocab idx) for every invalid next ungrouped token ocurringfor each active check.
+    # Should be called after each update."""
+    # def process_invalid_next_tokens(self):
+    #     self._active_futures = []
+    #     for check_idx, check in enumerate(self._active_checks):
+    #         for start_token_idx in range(0, len(self._ungrouped_tokens), self._batch_size):
+    #             self._active_futures += [
+    #                 self._executor.submit(
+    #                     _check_token_batched,
+    #                     check,
+    #                     check_idx,
+    #                     self._ungrouped_tokens[start_token_idx:start_token_idx+self._batch_size],
+    #                 )
+    #             ]
 
-    def await_invalid_next_tokens(self) -> Iterable[Tuple[int, int]]:
-        for future in as_completed(self._active_futures):
-            invalid_token_batch = future.result()
-            yield from invalid_token_batch
-        self._active_futures = []
+    # def await_invalid_next_tokens(self) -> Iterable[Tuple[int, int]]:
+    #     yield from self._invalid_tokens_from_group()
+    #     for future in as_completed(self._active_futures):
+    #         invalid_token_batch = future.result()
+    #         yield from invalid_token_batch
+    #     self._active_futures = []
 
     r"""
     Updates parsers for all active checks with next sampled token for the corresponding generation.
@@ -108,3 +141,19 @@ class SyntaxValidityCheckHandler:
             check.update_parser(self._token_vocab[token_id])
         if begin_next_check:
             self.process_invalid_next_tokens()
+
+
+class VocabSplit:
+    
+    def __init__(self) -> None:
+        self.filtered = []
+        self.remaining = []
+
+    def filter_vocab(self, vocab: List[str], grouping: Type[TokenGroup]):
+        self.filtered = []
+        self.remaining = []
+        for i, tok in enumerate(vocab):
+            if grouping.filter(tok):
+                self.filtered += [(i, tok)]
+            else:
+                self.remaining += [(i, tok)]

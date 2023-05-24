@@ -20,3 +20,6 @@ class SyntaxConstraint:
             return True
         except ParseFailure:
             return False
+        
+    def invalid_token_group(self):
+        return self.parser.invalid_token_group()

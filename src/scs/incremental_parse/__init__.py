@@ -1,5 +1,15 @@
 from enum import Enum
-from typing import Union, List
+from typing import Union, List, Dict, Tuple
+
+
+class TokenSplit:
+
+    def __init__(self, token_filter: "TokenGroup"):
+        self._filter = token_filter
+        self.filtered: List[Tuple[int, str]] = None
+
+    def init(self, vocab: List[str]):
+        self.tokens = [(i, tok) for i, tok in vocab if self._filter(tok)]
 
 
 class IncrementalParser:
@@ -46,6 +56,9 @@ class IncrementalParser:
         for c in chars:
             self._append(c)
 
+    def invalid_token_group(self) -> List["TokenGroup"]:
+        return EmptyTokenGroup
+
 
 class ParseFailure(Exception):
     pass
@@ -53,3 +66,24 @@ class ParseFailure(Exception):
 
 class SpecialToken(Enum):
     EOS = 0
+
+
+class TokenGroup:
+
+    @staticmethod
+    def filter(token: str) -> bool:
+        raise NotImplementedError()
+
+
+class AllTokenGroup(TokenGroup):
+
+    @staticmethod
+    def filter(token: str) -> bool:
+        return True
+    
+
+class EmptyTokenGroup(TokenGroup):
+
+    @staticmethod
+    def filter(token: str) -> bool:
+        return False

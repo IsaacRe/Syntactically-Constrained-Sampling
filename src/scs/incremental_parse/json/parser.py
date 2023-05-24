@@ -1,10 +1,10 @@
 from enum import Enum
-from typing import Dict, Union, Optional, List
+from typing import Dict, Union, Optional, List, Type
 from copy import deepcopy, copy
 
 from scs.incremental_parse import IncrementalParser
 
-from .. import IncrementalParser, ParseFailure, SpecialToken
+from .. import IncrementalParser, ParseFailure, SpecialToken, TokenGroup, AllTokenGroup
 from ..string_match import MultiStringMatchParser
 from .schema import JSONSchema, ObjectSchema, BaseType
 
@@ -54,6 +54,11 @@ class JSONParser(IncrementalParser):
         else:
             return self._subparser.get_parsed()
 
+    def invalid_token_group(self):
+        if self._subparser:
+            return self._subparser.invalid_token_group()
+        return BeginWithNonJsonCharGroup
+
 
 class ObjectOrArrayParser(IncrementalParser):
     def __init__(
@@ -78,6 +83,11 @@ class ObjectOrArrayParser(IncrementalParser):
         if self._active_subparser:
             parsed += self._active_subparser.get_parsed()
         return parsed
+    
+    def invalid_token_group(self) -> Optional[Type]:
+        if self._active_subparser:
+            return self._active_subparser.invalid_token_group()
+        return BeginWithNonJsonCharGroup
 
 
 class ObjectParser(ObjectOrArrayParser):
@@ -362,6 +372,11 @@ class NumberParser(IncrementalParser):
         else:
             raise ParseFailure(f"Invalid character for number: {char}")
         return False
+    
+    def invalid_token_group(self) -> Optional[Type]:
+        if self._has_period:
+            return NonNumericTokenGroup
+        return InvalidFloatTokenGroup
 
 
 class StringParser(IncrementalParser):
@@ -386,6 +401,9 @@ class StringParser(IncrementalParser):
         else:
             self._parsed += char
         return False
+    
+    def invalid_token_group(self) -> Optional[Type]:
+        return None  # all token types allowed
 
 
 class SpecialChar(Enum):
@@ -410,3 +428,35 @@ class ObjectParseStatus(Enum):
     FINISHED_KEY = 5
     FINISHED_VALUE = 6
     PARSE_COMPLETE = 7
+
+
+class NonNumericTokenGroup(TokenGroup):
+
+    @staticmethod
+    def filter(token: str) -> bool:
+        return not token.isnumeric()
+    
+
+class InvalidFloatTokenGroup(TokenGroup):
+
+    @staticmethod
+    def filter(token: str) -> bool:
+        period = False
+        for c in token:
+            if not token.isnumeric():
+                if c == ".":
+                    if period:
+                        return True
+                    period = True
+                else:
+                    return True
+        return False
+            
+
+class BeginWithNonJsonCharGroup(TokenGroup):
+
+    _JSON_CHARS = ['{', '}', '[', ']', '"', ',']
+
+    @staticmethod
+    def filter(token: str) -> bool:
+        return token[0] not in BeginWithNonJsonCharGroup._JSON_CHARS
