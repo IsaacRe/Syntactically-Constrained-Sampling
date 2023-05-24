@@ -58,6 +58,9 @@ class IncrementalParser:
 
     def invalid_token_group(self) -> List["TokenGroup"]:
         return EmptyTokenGroup
+    
+    def valid_token_group(self) -> List["TokenGroup"]:
+        return EmptyTokenGroup
 
 
 class ParseFailure(Exception):

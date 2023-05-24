@@ -2,11 +2,13 @@ from enum import Enum
 from typing import Dict, Union, Optional, List, Type
 from copy import deepcopy, copy
 
-from scs.incremental_parse import IncrementalParser
+from scs.incremental_parse import IncrementalParser, TokenGroup
 
-from .. import IncrementalParser, ParseFailure, SpecialToken, TokenGroup, AllTokenGroup
+from .. import IncrementalParser, ParseFailure, SpecialToken, TokenGroup, EmptyTokenGroup
 from ..string_match import MultiStringMatchParser
 from .schema import JSONSchema, ObjectSchema, BaseType
+
+JSON_CHARS = ['{', '}', '[', ']', '"', ',']
 
 
 class JSONParser(IncrementalParser):
@@ -59,6 +61,11 @@ class JSONParser(IncrementalParser):
             return self._subparser.invalid_token_group()
         return BeginWithNonJsonCharGroup
 
+    def valid_token_group(self) -> List[TokenGroup]:
+        if self._subparser:
+            return self._subparser.valid_token_group()
+        return EmptyTokenGroup
+
 
 class ObjectOrArrayParser(IncrementalParser):
     def __init__(
@@ -88,6 +95,11 @@ class ObjectOrArrayParser(IncrementalParser):
         if self._active_subparser:
             return self._active_subparser.invalid_token_group()
         return BeginWithNonJsonCharGroup
+
+    def valid_token_group(self) -> List[TokenGroup]:
+        if self._active_subparser:
+            return self._active_subparser.valid_token_group()
+        return EmptyTokenGroup
 
 
 class ObjectParser(ObjectOrArrayParser):
@@ -373,10 +385,13 @@ class NumberParser(IncrementalParser):
             raise ParseFailure(f"Invalid character for number: {char}")
         return False
     
-    def invalid_token_group(self) -> Optional[Type]:
+    def invalid_token_group(self) -> Optional[Type[TokenGroup]]:
         if self._has_period:
             return NonNumericTokenGroup
         return InvalidFloatTokenGroup
+
+    def valid_token_group(self) -> Optional[Type[TokenGroup]]:
+        return NumericTokenGroup
 
 
 class StringParser(IncrementalParser):
@@ -402,8 +417,13 @@ class StringParser(IncrementalParser):
             self._parsed += char
         return False
     
-    def invalid_token_group(self) -> Optional[Type]:
-        return None  # all token types allowed
+    def invalid_token_group(self) -> Optional[Type[TokenGroup]]:
+        return EmptyTokenGroup  # all token types allowed
+    
+    def valid_token_group(self) -> Optional[Type[TokenGroup]]:
+        # if token contains no quotes it will never close the string parser
+        # and is guaranteed to be valid all the way through
+        return NoQuoteCharGroup
 
 
 class SpecialChar(Enum):
@@ -428,6 +448,13 @@ class ObjectParseStatus(Enum):
     FINISHED_KEY = 5
     FINISHED_VALUE = 6
     PARSE_COMPLETE = 7
+
+
+class NumericTokenGroup(TokenGroup):
+
+    @staticmethod
+    def filter(token: str) -> bool:
+        return token.isnumeric() and (token[0] != "0" or len(token) > 1)
 
 
 class NonNumericTokenGroup(TokenGroup):
@@ -455,8 +482,16 @@ class InvalidFloatTokenGroup(TokenGroup):
 
 class BeginWithNonJsonCharGroup(TokenGroup):
 
-    _JSON_CHARS = ['{', '}', '[', ']', '"', ',']
+    @staticmethod
+    def filter(token: str) -> bool:
+        return token[0] not in JSON_CHARS
+
+
+class NoQuoteCharGroup(TokenGroup):
 
     @staticmethod
     def filter(token: str) -> bool:
-        return token[0] not in BeginWithNonJsonCharGroup._JSON_CHARS
+        for c in token:
+            if c == SpecialChar.QUOTE.value:
+                return False
+        return True            

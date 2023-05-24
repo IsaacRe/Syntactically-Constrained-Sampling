@@ -1,6 +1,7 @@
 from typing import Union, List
 
 from ..incremental_parse import IncrementalParser, ParseFailure, SpecialToken
+from ..incremental_parse import EmptyTokenGroup
 
 
 class SyntaxConstraint:
@@ -23,3 +24,6 @@ class SyntaxConstraint:
         
     def invalid_token_group(self):
         return self.parser.invalid_token_group()
+    
+    def valid_token_group(self):
+        return self.parser.valid_token_group()

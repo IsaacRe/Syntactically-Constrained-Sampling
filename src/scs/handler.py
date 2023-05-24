@@ -2,17 +2,18 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from concurrent.futures import Future, as_completed
 from typing import List, Iterable, Tuple, Optional, Dict, Type
 from dataclasses import dataclass
+import numpy as np
 
 from .constraint import SyntaxConstraint
 from .constraint.json import valid_json, force_json_schema
 from .constraint.one_of import one_of
-from .incremental_parse.json.parser import AllTokenGroup, NonNumericTokenGroup, InvalidFloatTokenGroup, BeginWithNonJsonCharGroup
+from .incremental_parse.json.parser import NonNumericTokenGroup, InvalidFloatTokenGroup, BeginWithNonJsonCharGroup, NoQuoteCharGroup, NumericTokenGroup
 from .incremental_parse.string_match import NonAlnumGroup
-from .incremental_parse import TokenGroup
+from .incremental_parse import TokenGroup, AllTokenGroup, EmptyTokenGroup
 
 
 TOKEN_GROUPS = [
-    AllTokenGroup, NonNumericTokenGroup, InvalidFloatTokenGroup, BeginWithNonJsonCharGroup, NonAlnumGroup
+    AllTokenGroup, EmptyTokenGroup, NonNumericTokenGroup, InvalidFloatTokenGroup, BeginWithNonJsonCharGroup, NonAlnumGroup, NoQuoteCharGroup, NumericTokenGroup
 ]
 
 
@@ -87,13 +88,21 @@ class SyntaxValidityCheckHandler:
     Yield tokens from each invalid group"""
     def await_invalid_next_tokens(self) -> Iterable[Tuple[int, int]]:
         for check_idx, check in enumerate(self._active_checks):
-            suppress_tokens, check_tokens = [], enumerate(self._token_vocab)
-            vocab_split = self._vocab_splits.get(check.invalid_token_group())
-            if vocab_split:
-                suppress_tokens, check_tokens = vocab_split.filtered, vocab_split.remaining
+            toks_to_check = np.ones(len(self._token_vocab)).astype(np.bool_)
+            suppress_tokens, allow_tokens = [], []
+            invalid_vocab_split = self._vocab_splits.get(check.invalid_token_group())
+            if invalid_vocab_split:
+                suppress_tokens = invalid_vocab_split.filtered
             for token_id, token in suppress_tokens:
                 yield check_idx, token_id
-            for token_id, token in check_tokens:
+                toks_to_check[token_id] = False
+            valid_vocab_split = self._vocab_splits.get(check.valid_token_group())
+            if valid_vocab_split:
+                allow_tokens = valid_vocab_split.filtered
+            for token_id, token in allow_tokens:
+                toks_to_check[token_id] = False
+            for token_id in np.where(toks_to_check)[0]:
+                token = self._token_vocab[token_id]
                 if not check.check_next(token):
                     yield check_idx, token_id
 
@@ -153,7 +162,7 @@ class VocabSplit:
         self.filtered = []
         self.remaining = []
         for i, tok in enumerate(vocab):
-            if grouping.filter(tok):
+            if isinstance(tok, str) and grouping.filter(tok):
                 self.filtered += [(i, tok)]
             else:
                 self.remaining += [(i, tok)]
