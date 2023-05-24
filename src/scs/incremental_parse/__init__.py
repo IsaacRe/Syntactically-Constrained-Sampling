@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Union, List, Dict, Tuple
+from typing import Union, List, Dict, Tuple, Optional
 
 
 class TokenSplit:
@@ -55,6 +55,9 @@ class IncrementalParser:
     def append(self, chars: Union[List[str], "SpecialToken"]):
         for c in chars:
             self._append(c)
+
+    def get_next(self) -> List[str]:
+        return []
 
     def invalid_token_group(self) -> List["TokenGroup"]:
         return EmptyTokenGroup

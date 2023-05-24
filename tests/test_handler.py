@@ -23,6 +23,10 @@ class TestJSONSchema(unittest.TestCase):
         print(''.join(TEST_VOCAB[i] for i in tokenized))
 
         for tok in tokenized:
-            list(handler.await_invalid_next_tokens())
+            l = list(handler.await_invalid_next_tokens())
+            if l:
+                _, _, suppress = l[0]
+                if not suppress:
+                    self.assertTrue(tok in [i[1] for i in l])
             handler.update([tok])
             handler.process_invalid_next_tokens()

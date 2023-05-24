@@ -56,6 +56,14 @@ class JSONParser(IncrementalParser):
         else:
             return self._subparser.get_parsed()
 
+    def get_next(self) -> List[str]:
+        if self._subparser:
+            return self._subparser.get_next()
+        elif self._schema._is_list:
+            return ["["]
+        else:
+            return ["{"]
+
     def invalid_token_group(self):
         if self._subparser:
             return self._subparser.invalid_token_group()
@@ -94,7 +102,7 @@ class ObjectOrArrayParser(IncrementalParser):
     def invalid_token_group(self) -> Optional[Type]:
         if self._active_subparser:
             return self._active_subparser.invalid_token_group()
-        return BeginWithNonJsonCharGroup
+        return EmptyTokenGroup
 
     def valid_token_group(self) -> List[TokenGroup]:
         if self._active_subparser:
@@ -258,6 +266,20 @@ class ObjectParser(ObjectOrArrayParser):
 
         raise Exception("Something went wrong")
 
+    def get_next(self) -> List[str]:
+        if self._active_subparser:
+            return self._active_subparser.get_next()
+        elif self._parse_status in [ObjectParseStatus.OPENED, ObjectParseStatus.AWAITING_KEY]:
+            return ['"']
+        elif self._parse_status == ObjectParseStatus.AWAITING_VALUE:
+            return []
+        elif self._parse_status == ObjectParseStatus.FINISHED_KEY:
+            return [':']
+        elif self._parse_status == ObjectParseStatus.FINISHED_VALUE:
+            return [',"']
+        else:
+            return []
+
 
 class ArrayParser(ObjectOrArrayParser):
     def __init__(
@@ -337,6 +359,14 @@ class ArrayParser(ObjectOrArrayParser):
             raise ParseFailure(f"Expected ',' or ']', got {char}")
 
         raise Exception("Something went wrong")
+    
+    def get_next(self) -> List[str]:
+        if self._active_subparser:
+            return self._active_subparser.get_next()
+        elif self._parse_status == ObjectParseStatus.FINISHED_VALUE:
+            return [',']
+        else:
+            return []
 
 
 class NumberParser(IncrementalParser):

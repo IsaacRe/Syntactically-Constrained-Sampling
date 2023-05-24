@@ -22,6 +22,9 @@ class SyntaxConstraint:
         except ParseFailure:
             return False
         
+    def get_next(self) -> List[str]:
+        return self.parser.get_next()
+        
     def invalid_token_group(self):
         return self.parser.invalid_token_group()
     

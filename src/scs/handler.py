@@ -1,6 +1,6 @@
 from concurrent.futures.thread import ThreadPoolExecutor
 from concurrent.futures import Future, as_completed
-from typing import List, Iterable, Tuple, Optional, Dict, Type
+from typing import List, Iterable, Tuple, Optional, Dict, Type, Union
 from dataclasses import dataclass
 import numpy as np
 
@@ -72,12 +72,13 @@ class SyntaxValidityCheckHandler:
         num_workers: int = 2,
         begin_first_check: bool = True,
     ):
-        self._executor = ThreadPoolExecutor(max_workers=num_workers)
+        self._executor = None #ThreadPoolExecutor(max_workers=num_workers)
         self._num_workers = num_workers
         self._batch_size = len(token_vocab) // num_workers
         self._active_futures: List[Future] = []
         self._initialized = False
         self._token_vocab = token_vocab
+        self._vocab_map = {t: i for i, t in enumerate(token_vocab) if isinstance(t, str)}
         self._vocab_splits = make_vocab_splits(token_vocab, *TOKEN_GROUPS)
         self._check_factory = check_factory
         self._active_checks = [check_factory()]  # initialize single check to constrain start tokens
@@ -86,15 +87,24 @@ class SyntaxValidityCheckHandler:
 
     r"""
     Yield tokens from each invalid group"""
-    def await_invalid_next_tokens(self) -> Iterable[Tuple[int, int]]:
+    def await_invalid_next_tokens(self) -> Union[List[Tuple[int, int]], Iterable[Tuple[int, int]]]:
         for check_idx, check in enumerate(self._active_checks):
+            next_tokens = check.get_next()
+            if next_tokens:
+                for t in next_tokens:
+                    for i in range(min(6, len(t)), 0, -1):
+                        if t[:i] in self._vocab_map:
+                            yield check_idx, self._vocab_map[t[:i]], False
+                            break
+                return
+                
             toks_to_check = np.ones(len(self._token_vocab)).astype(np.bool_)
             suppress_tokens, allow_tokens = [], []
             invalid_vocab_split = self._vocab_splits.get(check.invalid_token_group())
             if invalid_vocab_split:
                 suppress_tokens = invalid_vocab_split.filtered
             for token_id, token in suppress_tokens:
-                yield check_idx, token_id
+                yield check_idx, token_id, True
                 toks_to_check[token_id] = False
             valid_vocab_split = self._vocab_splits.get(check.valid_token_group())
             if valid_vocab_split:
@@ -104,7 +114,7 @@ class SyntaxValidityCheckHandler:
             for token_id in np.where(toks_to_check)[0]:
                 token = self._token_vocab[token_id]
                 if not check.check_next(token):
-                    yield check_idx, token_id
+                    yield check_idx, token_id, True
 
     def process_invalid_next_tokens(self):
         pass
