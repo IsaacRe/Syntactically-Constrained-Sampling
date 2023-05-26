@@ -491,6 +491,9 @@ class NonNumericTokenGroup(TokenGroup):
 
     @staticmethod
     def filter(token: str) -> bool:
+        # numbers can be ended at any time by JSON control chars
+        if token[0] in JSON_CHARS:
+            return False
         return not token.isnumeric()
     
 
@@ -498,6 +501,8 @@ class InvalidFloatTokenGroup(TokenGroup):
 
     @staticmethod
     def filter(token: str) -> bool:
+        if token[0] in JSON_CHARS:
+            return False
         period = False
         for c in token:
             if not token.isnumeric():
