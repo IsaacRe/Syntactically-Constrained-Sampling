@@ -152,8 +152,8 @@ class SyntaxValidityCheckHandler:
     If this is the first sample step, initialize a check for each element in batch"""
     def update(self, next_token_ids: List[int], begin_next_check: bool = True):
         next_token_id = next_token_ids[0]  # currently only supports single-beam and greedy
-        print(next_token_id)
-        print(f"Next token: {next_token_id}, {repr(self._token_vocab[next_token_id])}")
+        # print(next_token_id)
+        # print(f"Next token: {next_token_id}, {repr(self._token_vocab[next_token_id])}")
         if not self._initialized:  # this is the first sampling step
             self._active_checks += [self._check_factory() for _ in range(len(next_token_ids) - 1)]
         for token_id, check in zip(next_token_ids, self._active_checks):

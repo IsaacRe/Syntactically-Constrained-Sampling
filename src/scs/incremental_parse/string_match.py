@@ -35,7 +35,10 @@ class StringMatchParser(IncrementalParser):
         return self._done
 
     def get_next(self) -> List[str]:
-        return [self.match_string[self._parse_idx:]]
+        remaining = self.match_string[self._parse_idx:]
+        if remaining:
+            return [remaining]
+        return []
     
     def invalid_token_groups(self) -> TokenGroup:
         return NonAlnumGroup

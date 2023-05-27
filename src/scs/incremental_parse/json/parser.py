@@ -141,6 +141,9 @@ class ObjectParser(ObjectOrArrayParser):
     
     def _is_complete(self) -> bool:
         return len(self._remaining_required_keys) == 0
+
+    def _no_more_keys(self) -> bool:
+        return len(self._remaining_required_keys) + len(self._remaining_optional_keys) == 0
     
     def _copy_from(self, other: "ObjectParser"):
         super()._copy_from(other)
@@ -187,6 +190,8 @@ class ObjectParser(ObjectOrArrayParser):
             self._parsed += self._active_subparser.closing_char
             self._update_remaining(self._current_key)
             if self._active_subparser.closing_char == SpecialChar.COMMA.value:
+                if self._no_more_keys():
+                    raise ParseFailure("Attempting to continue completed object")
                 self._parse_status = ObjectParseStatus.AWAITING_KEY
             elif self._active_subparser.closing_char == SpecialChar.CLOSE_OBJECT.value:
                 if not self._is_complete():
@@ -265,6 +270,17 @@ class ObjectParser(ObjectOrArrayParser):
             raise ParseFailure(f"Expected '\"' after parsed key, got {char}")
 
         raise Exception("Something went wrong")
+    
+    def _value_prefix(self) -> str:
+        prefix = ""
+        if self._current_value_schema._is_list:
+            prefix = "["
+        if isinstance(self._current_value_schema, ObjectSchema):
+            return f'{prefix}{{"'
+        elif self._current_value_schema == BaseType.NUMBER.schema(is_list=True):
+            return prefix
+        elif self._current_value_schema == BaseType.STRING.schema(is_list=True):
+            return f'{prefix}"'
 
     def get_next(self) -> List[str]:
         if self._active_subparser:
@@ -272,11 +288,11 @@ class ObjectParser(ObjectOrArrayParser):
         elif self._parse_status in [ObjectParseStatus.OPENED, ObjectParseStatus.AWAITING_KEY]:
             return ['"']
         elif self._parse_status == ObjectParseStatus.AWAITING_VALUE:
-            return []
+            prefix = self._value_prefix()
+            return [prefix] if prefix else []
         elif self._parse_status == ObjectParseStatus.FINISHED_KEY:
-            return [':']
-        elif self._parse_status == ObjectParseStatus.FINISHED_VALUE:
-            return [',"']
+            prefix = self._value_prefix()
+            return [f':{prefix}']
         else:
             return []
 
@@ -360,11 +376,22 @@ class ArrayParser(ObjectOrArrayParser):
 
         raise Exception("Something went wrong")
     
+    def _value_prefix(self) -> str:
+        if isinstance(self._schema, ObjectSchema):
+            return '{"'
+        elif self._schema == BaseType.NUMBER.schema(is_list=True):
+            return ""
+        elif self._schema == BaseType.STRING.schema(is_list=True):
+            return '"'
+    
     def get_next(self) -> List[str]:
         if self._active_subparser:
             return self._active_subparser.get_next()
         elif self._parse_status == ObjectParseStatus.FINISHED_VALUE:
-            return [',']
+            return []
+        elif self._parse_status in [ObjectParseStatus.OPENED, ObjectParseStatus.AWAITING_VALUE]:
+            prefix = self._value_prefix()
+            return [prefix] if prefix else []
         else:
             return []
 
@@ -484,7 +511,7 @@ class NumericTokenGroup(TokenGroup):
 
     @staticmethod
     def filter(token: str) -> bool:
-        return token.isnumeric() and (token[0] != "0" or len(token) > 1)
+        return token.isnumeric() and token[0] != "0"
 
 
 class NonNumericTokenGroup(TokenGroup):

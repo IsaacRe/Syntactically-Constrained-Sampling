@@ -151,7 +151,7 @@ class JSONSchemaParser(ObjectSchemaParser):
 
     def _append(self, char: str | SpecialToken) -> bool:
         if self._done:
-            if char == SpecialToken.EOS:
+            if (isinstance(char, str) and char.isspace()) or char == SpecialToken.EOS:
                 return True
             raise ParseFailure("Got EOS before schema was complete")
         super()._append(char)

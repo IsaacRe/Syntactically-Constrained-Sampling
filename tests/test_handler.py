@@ -5,10 +5,12 @@ from scs.handler import SyntaxValidityCheckHandler, JSONSchemaCheckFactory, Synt
 
 #              0     1    2    3    4    5      6    7    8    9    10       11   12   13
 TEST_VOCAB = ['{"', '{', '}', '[', ']', 'key', '1', '2', '3', '"', 'value', ':', ',', ' ']
-TEST_SCHEMA = """[]{
+TEST_SCHEMA = """
+[]{
     key2: string,
     key3?: number
-}"""
+}
+"""
 
 class TestJSONSchema(unittest.TestCase):
 
